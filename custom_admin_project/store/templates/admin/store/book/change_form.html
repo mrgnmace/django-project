@@ -1,0 +1,56 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script type="text/javascript">
+        
+        window.addEventListener("load", function() {
+            // Flag to track if the form is dirty (i.e., if there are unsaved changes)
+            let formModified = false;
+
+            // Get all form inputs
+            let formInputs = document.querySelectorAll("input, textarea, select");
+
+            // Add an event listener to each form input to track changes
+            formInputs.forEach(function(input) {
+                input.addEventListener("change", function() {
+                    formModified = true;  // Mark the form as modified when a change occurs
+                });
+            });
+
+            
+            // Warn the user if they attempt to leave the page without saving
+            window.addEventListener("beforeunload", function(e) {
+                if (formModified) {
+                    // Set the confirmation message
+                    let confirmationMessage = "You have unsaved changes. Are you sure you want to leave without saving?";
+                    (e || window.event).returnValue = confirmationMessage;
+                    return confirmationMessage;  // For older browsers
+                }
+            });
+
+            // Reset the flag when the form is submitted (because changes will be saved)
+            document.querySelector("form").addEventListener("submit", function() {
+                formModified = false;
+            });
+        });
+
+        // document.querySelector("#add-field").addEventListener("click", function() {
+        //     console.log("buhnjmk,l")
+        //     let newField = document.createElement("input");
+        //     newField.setAttribute("type", "text");
+        //     newField.setAttribute("name", "extra_field[]");
+        //     newField.setAttribute("placeholder", "Additional Field");
+
+        //     // Append the new field to the div
+        //     document.querySelector("#additional-fields").appendChild(newField);
+        // });
+
+    </script>
+{% endblock %}
+
+{% block after_field_sets %}
+    {{ block.super }}
+    <button id="add-field">Add New Field</button>
+    <div id="additional-fields"></div>
+{% endblock %}

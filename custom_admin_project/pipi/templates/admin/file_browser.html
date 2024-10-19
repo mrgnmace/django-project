@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h2>File Browser</h2>
+<ul>
+    {% for file in file_list %}
+    <li><a href="{{ file.file_url }}" target="_blank">{{ file.file_name }}</a></li>
+    {% endfor %}
+</ul>
+{% endblock %}

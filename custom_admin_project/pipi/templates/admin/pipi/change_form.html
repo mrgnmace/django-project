@@ -1,0 +1,1011 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+    {{ block.super }}
+    <div class="main">
+        <div class="all_sections" id="all_sections">
+            
+        </div>
+        <button type="button" id="add_section_button">Add section</button>
+    </div>
+    {% endblock %}
+    
+    
+    {% block extrahead %}
+    {{ block.super }}
+    <!-- Quill stylesheet -->
+    <link href="https://cdn.quilljs.com/2.0.0-dev.4/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/2.0.0-dev.4/quill.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let fieldCount = 1
+            let sectionCount = 1
+
+            const Inline = Quill.import('blots/inline');
+
+            class ButtonBlot extends Inline {
+                static create(value) {
+                    let node = super.create();
+                    node.setAttribute('class', 'quill-button');
+                    node.setAttribute('data-url', value.url);
+                    node.setAttribute('contenteditable', false); // Make the button non-editable
+                    node.innerHTML = value.label;
+                    return node;
+                }
+
+                static formats(node) {
+                    return {
+                        label: node.innerHTML,
+                        url: node.getAttribute('data-url')
+                    };
+                }
+
+                format(name, value) {
+                    if (name === 'button' && value) {
+                        this.domNode.setAttribute('data-url', value.url);
+                        this.domNode.innerHTML = value.label;
+                    } else {
+                        super.format(name, value);
+                    }
+                }
+            }
+
+            ButtonBlot.blotName = 'button';
+            ButtonBlot.tagName = 'button';
+
+            Quill.register(ButtonBlot);
+
+            // Step 2: Initialize Quill and add a toolbar handler for the custom button
+            function initializeQuillEditor(editorId, hiddenInputId, preFill = '') {
+                const quill = new Quill(`#${editorId}`, {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: {
+                            container: [
+                                ['bold', 'italic', 'underline'],
+                                ['link'],
+                                ['code-block'],
+                                ['button'], // Add custom button option
+                                ['clean']
+                            ],
+                            handlers: {
+                                'button': function() {
+                                    var label = prompt('Enter button label');
+                                    var url = prompt('Enter button URL');
+                                    if (label && url) {
+                                        let range = this.quill.getSelection();
+                                        this.quill.formatText(range.index, range.length, 'button', { label: label, url: url });
+                                    }
+                                    if (label && url) {
+                                        let range = this.quill.getSelection(); // Get the current selection in the editor
+                                        if (range) {
+                                            // Insert the custom ButtonBlot at the specified position
+                                            this.quill.insertEmbed(range.index, 'button', { label: label, url: url });
+                                            this.quill.setSelection(range.index + 1); // Move cursor after the button
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                
+
+                // Pre-fill the editor if any content is provided
+                if (preFill) {
+                    quill.root.innerHTML = preFill;
+                }
+
+                // Update the hidden input field on content change
+                quill.on('text-change', function() {
+                    const hiddenInput = document.getElementById(hiddenInputId);
+                    hiddenInput.value = quill.root.innerHTML;
+                });
+            }
+            
+            // moving elements functions
+            function moveUp(fieldDiv, elementsContainer, the_section_index) {
+                let position = -1;
+                let children = elementsContainer.children;
+                for (let i = 0; i < children.length; i++) {
+                    if (children[i] === fieldDiv) {
+                        position = i;
+                        if (position < 1) {
+                            return; // If it's already the first element, do nothing
+                        }
+                    }
+                }
+                let dynamicElements = document.querySelectorAll(`.field_section_index_${the_section_index}`);
+                let firstElement = dynamicElements[position];
+                let secondElement = dynamicElements[position - 1];
+                let parent = firstElement.parentNode;
+                try {
+                    parent.insertBefore(firstElement, secondElement); // Swap elements
+                } catch {
+                    return;
+                }
+    
+                swapIndexes(firstElement, secondElement);
+            }
+            function moveDown(fieldDiv, elementsContainer, the_section_index) {
+                let position = -1;
+                let children = elementsContainer.children;
+                for (let i = 0; i < children.length; i++) {
+                    if (children[i] === fieldDiv) {
+                        position = i;
+                        if (position < 0 || position >= children.length - 1) {
+                            return; // If it's already the last element, do nothing
+                        }
+                    }
+                }
+                let dynamicElements = document.querySelectorAll(`.field_section_index_${the_section_index}`);
+                let firstElement = dynamicElements[position];
+                let secondElement = dynamicElements[position + 1];
+                let parent = firstElement.parentNode;
+                try {
+                    parent.insertBefore(secondElement, firstElement); // Swap elements
+                } catch {
+                    return;
+                }
+    
+                swapIndexes(firstElement, secondElement);
+            }
+            function swapIndexes(firstElement, secondElement) {
+                // Swap the `name` and `id` attributes of the input fields
+                let firstInput = firstElement.querySelector('input');
+                let secondInput = secondElement.querySelector('input');
+    
+                if (firstInput && secondInput) {
+                    let tempName = firstInput.name;
+                    let tempId = firstInput.id;
+    
+                    // Swap the `name` and `id` of the two inputs
+                    firstInput.name = secondInput.name;
+                    firstInput.id = secondInput.id;
+    
+                    secondInput.name = tempName;
+                    secondInput.id = tempId;
+                }
+    
+                // If you need to swap label 'for' attributes too
+                let firstLabel = firstElement.querySelector('label');
+                let secondLabel = secondElement.querySelector('label');
+    
+                if (firstLabel && secondLabel) {
+                    let tempFor = firstLabel.getAttribute('for');
+                    firstLabel.setAttribute('for', secondLabel.getAttribute('for'));
+                    secondLabel.setAttribute('for', tempFor);
+                }
+            }
+            
+            // moving elements functions
+
+            // creating elements functions
+            function createField(elementsContainer, the_section_index, preFill='') {
+                // creating field constants
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = `form-row field-extra_field field_section_index_${the_section_index}`;
+                fieldDiv.id = `field_${fieldCount}`;
+                const Label = document.createElement('label');
+                Label.setAttribute('for', `id_extra_field_${fieldCount}`);
+                Label.textContent = `Extra Field ${fieldCount}:`;
+                const Input = document.createElement('input');
+                Input.setAttribute('type', 'text');
+                Input.setAttribute('name', `extra_fields_${fieldCount}_${the_section_index}`);
+                Input.setAttribute('id', `id_extra_field_${fieldCount}`);
+                Input.value = preFill
+                // creating field constants
+
+                
+                const dashDiv = document.createElement('div'); 
+                dashDiv.className = 'field-dash-div';
+                const dashName = document.createElement('h2'); 
+                dashName.className = 'field-dash-name';
+                dashName.textContent = 'Field';
+
+                console.log('Creating collapseButton');
+                const collapseButton = document.createElement('button');
+                collapseButton.setAttribute('type', 'button');
+                collapseButton.id = `collapse_element_button`;
+                collapseButton.className = 'collapse-element-button';
+                collapseButton.textContent = 'collapse';
+                const parent = fieldDiv;
+                const children = Array.from(parent.children);
+                const filteredChildren = children.filter(child => !child.classList.contains('field-dash-div'));
+
+                collapseButton.addEventListener('click', function(){
+                    if(filteredChildren.style.display === 'none'){
+                        filteredChildren.style.display = 'block';
+                    } else{
+                        filteredChildren.style.display = 'none';
+                    }
+                })
+                
+                // appendings
+                dashDiv.appendChild(dashName)
+                dashDiv.appendChild(deleteFunc(fieldDiv, elementsContainer));
+                dashDiv.appendChild(collapseButton)
+                dashDiv.appendChild(createMoveUpButton(fieldDiv, elementsContainer, the_section_index));
+                dashDiv.appendChild(createMoveDownButton(fieldDiv, elementsContainer, the_section_index));
+                fieldDiv.appendChild(dashDiv)
+                fieldDiv.appendChild(Label);
+                fieldDiv.appendChild(Input);
+
+                elementsContainer.appendChild(fieldDiv);
+                // appendings
+
+                fieldCount++;
+            }
+            function createImageField(elementsContainer, the_section_index, preFill='') {
+                // Create a container div for the image field
+                const imageDiv = document.createElement('div');
+                imageDiv.className = `form-row image-field field_section_index_${the_section_index}`;
+                imageDiv.id = `image_field_${fieldCount}`;
+                // Create a container div for the image field
+
+                const dashDiv = document.createElement('div'); 
+                dashDiv.className = 'image-dash-div';
+                const dashName = document.createElement('h2'); 
+                dashName.className = 'image-dash-name';
+                dashName.textContent = 'Image';
+                dashDiv.appendChild(dashName)
+                imageDiv.appendChild(dashDiv)
+
+                // Create label and input elements for the image
+                const imageLabel = document.createElement('label');
+                imageLabel.textContent = `Upload Image ${fieldCount}:`;
+                const imageInput = document.createElement('input');
+                imageInput.setAttribute('type', 'file');
+                imageInput.setAttribute('name', `dynamic_images_${fieldCount}_${the_section_index}`);
+                imageInput.setAttribute('id', `id_image_field_${fieldCount}`);
+                imageInput.accept = 'image/*';
+
+                const hiddenInput = document.createElement('input');
+                hiddenInput.setAttribute('type', 'hidden');
+                hiddenInput.setAttribute('name', `dynamic_images_${fieldCount}_${the_section_index}`);
+                hiddenInput.id = `id_image_hidden_field_${fieldCount}`;
+                // Create label and input elements for the image
+
+                console.log(preFill)
+                if (preFill !== ''){
+                    const imagePreview = document.createElement('img');
+                    imagePreview.setAttribute('id', `image_preview_${fieldCount}`);
+                    imagePreview.setAttribute('src', preFill); // Replace with your placeholder URL
+                    imagePreview.setAttribute('alt', 'Image Preview');
+                    imagePreview.style.maxWidth = '200px';
+                    imageDiv.appendChild(imagePreview)
+
+                    imageInput.addEventListener('change', function() {
+                        const file = imageInput.files[0]; // Get the selected file
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                imagePreview.src = e.target.result; // Set the preview to the uploaded file's content
+                            };
+                            reader.readAsDataURL(file); // Read the file as a Data URL
+                        }
+                    });
+                } else{
+                    const imagePreview = document.createElement('img');
+                    imagePreview.setAttribute('alt', 'Image Ppreview');
+                    imagePreview.style.maxWidth = '200px';
+                    imageDiv.appendChild(imagePreview)
+
+                    imageInput.addEventListener('change', function() {
+                        const file = imageInput.files[0]; // Get the selected file
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                imagePreview.src = e.target.result; // Set the preview to the uploaded file's content
+                            };
+                            reader.readAsDataURL(file); // Read the file as a Data URL
+                        }
+                    });
+                }
+
+                const collapseButton = document.createElement('button');
+                collapseButton.setAttribute('type', 'button');
+                collapseButton.id = `collapse_element_button`;
+                collapseButton.className = 'collapse-element-button';
+                collapseButton.textContent = 'collapse';
+                const parent = imageDiv;
+                const children = Array.from(parent.children);
+                console.log(children)
+                const filteredChildren = children.filter(child => !child.classList.contains('image-dash-div'));
+
+                
+                collapseButton.addEventListener('click', function() {
+                    filteredChildren.forEach(child => {
+                        if (child.style.display === 'none') {
+                            child.style.display = 'block';
+                        } else {
+                            child.style.display = 'none';
+                        }
+                    });
+                });
+                
+                imageDiv.appendChild(imageLabel);
+                imageDiv.appendChild(imageInput);
+                dashDiv.appendChild(deleteFunc(imageDiv, elementsContainer));
+                dashDiv.appendChild(collapseButton);
+                dashDiv.appendChild(createMoveUpButton(imageDiv, elementsContainer, the_section_index));
+                dashDiv.appendChild(createMoveDownButton(imageDiv, elementsContainer, the_section_index));
+                elementsContainer.appendChild(imageDiv);
+
+                                
+
+                fieldCount++;
+            }
+            function createAccordion(elementsContainer, the_section_index, preFill=[]){
+                let itemCount = 1
+                the_field_count = fieldCount
+                const acDiv = document.createElement('div');
+                acDiv.className = `form-row accordion-field field_section_index_${the_section_index}`;
+                acDiv.id = `accordion_div_${the_field_count}`;
+                fieldCount++;
+                const acIDiv = document.createElement('div');
+                acIDiv.className = `acIDiv_${the_section_index}`;
+                acIDiv.id = `acIDiv_${the_field_count}`;
+                
+                const dashDiv = document.createElement('div'); 
+                dashDiv.className = 'ac-dash-div';
+                const dashName = document.createElement('h2'); 
+                dashName.className = 'ac-dash-name';
+                dashName.textContent = 'Accordion';
+                dashDiv.appendChild(dashName)
+                acDiv.appendChild(dashDiv)
+                
+                const addItemButton = document.createElement('button');
+                addItemButton.setAttribute('type', 'button');
+                addItemButton.textContent = 'Add item';
+                addItemButton.className = 'additem-button';
+                addItemButton.addEventListener('click', function() {
+                    createItemForAccrodion(elementsContainer, the_section_index, acIDiv, the_field_count, itemCount);
+                    itemCount++;
+                });
+
+                if (preFill != {}){
+                    preFill.forEach(item => {
+                        console.log('foreach: ', item)
+                        createItemForAccrodion(elementsContainer, the_section_index, acIDiv, the_field_count, itemCount, preFill=item);
+                        itemCount++;
+                    });
+                }
+                
+                
+                dashDiv.appendChild(deleteFunc(acDiv, elementsContainer));
+                dashDiv.appendChild(createMoveUpButton(acDiv, elementsContainer, the_section_index));
+                dashDiv.appendChild(createMoveDownButton(acDiv, elementsContainer, the_section_index));
+                acDiv.appendChild(addItemButton);
+                acDiv.appendChild(acIDiv)
+                elementsContainer.appendChild(acDiv);
+                
+                const collapseButton = document.createElement('button');
+                collapseButton.setAttribute('type', 'button');
+                collapseButton.id = `collapse_element_button`;
+                collapseButton.className = 'collapse-element-button';
+                collapseButton.textContent = 'collapse';
+                const parent = acDiv;
+                const children = Array.from(parent.children);
+                console.log(children)
+                const filteredChildren = children.filter(child => !child.classList.contains('ac-dash-div'));
+                
+                
+                collapseButton.addEventListener('click', function() {
+                    filteredChildren.forEach(child => {
+                        if (child.style.display === 'none') {
+                            child.style.display = 'block';
+                        } else {
+                            child.style.display = 'none';
+                        }
+                    });
+                });
+                dashDiv.appendChild(collapseButton);
+                
+            }
+            function createItemForAccrodion(elementsContainer, the_section_index, acDiv, the_field_count, itemCount, preFill=null){
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `form-row ac-item ac_section_index_${the_section_index}`;
+                itemDiv.id = `accordion_item_${the_field_count}`;
+
+                const itemContentDiv = document.createElement('div');
+                itemContentDiv.className = `form-row ac-item-content`;
+                itemContentDiv.id = `accordion_item_content_${the_field_count}`;
+                const description = document.createElement('input');
+                description.setAttribute('type', 'text');
+                description.setAttribute('name', `ac_description_${the_field_count}_${the_section_index}_${itemCount}`);
+                description.setAttribute('id', `id_ac_desription_${the_field_count}`);
+                description.className = `form-row`;
+                const content = document.createElement('input');
+                content.setAttribute('type', 'text');
+                content.setAttribute('name', `ac_content_${the_field_count}_${the_section_index}_${itemCount}`);
+                content.setAttribute('id', `id_ac_content_${the_field_count}`);
+                content.className = `display-block`;
+
+                if (preFill){
+                    description.value = preFill.description;
+                    content.value = preFill.content;
+                }
+
+
+                itemContentDiv.appendChild(description);
+                itemContentDiv.appendChild(content);
+                itemDiv.appendChild(itemContentDiv);
+                acDiv.appendChild(itemDiv);
+                
+                fieldCount++;
+            }
+            function createRichTextField(elementsContainer, the_section_index, preFill='') {
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = `form-row rich-text-field field_section_index_${the_section_index}`;
+                fieldDiv.id = `rich_text_field_${fieldCount}`;
+
+                const dashDiv = document.createElement('div'); 
+                dashDiv.className = 'field-dash-div';
+                const dashName = document.createElement('h2'); 
+                dashName.className = 'field-dash-name';
+                dashName.textContent = 'Field';
+
+                
+
+                
+                // appendings
+                dashDiv.appendChild(dashName)
+                dashDiv.appendChild(deleteFunc(fieldDiv, elementsContainer));
+                // dashDiv.appendChild(collapseButton);
+                dashDiv.appendChild(createMoveUpButton(fieldDiv, elementsContainer, the_section_index));
+                dashDiv.appendChild(createMoveDownButton(fieldDiv, elementsContainer, the_section_index));
+                fieldDiv.appendChild(dashDiv)
+
+
+
+                // const Label = document.createElement('label');
+                // Label.setAttribute('for', `quill_editor_${fieldCount}`);
+                // Label.textContent = `Rich Text Field ${fieldCount}:`;
+
+                const quillContainer = document.createElement('div');
+                quillContainer.id = `quill_editor_${fieldCount}`;
+                quillContainer.style.height = '200px'; // Set an appropriate height for the editor
+
+                const hiddenInput = document.createElement('input');
+                hiddenInput.setAttribute('type', 'hidden');
+                hiddenInput.setAttribute('name', `rich_text_content_${fieldCount}_${the_section_index}`);
+                hiddenInput.id = `quill_content_${fieldCount}`;
+
+                // fieldDiv.appendChild(Label);
+                fieldDiv.appendChild(quillContainer);
+                fieldDiv.appendChild(hiddenInput);
+                elementsContainer.appendChild(fieldDiv);
+
+                const collapseButton = document.createElement('button');
+                collapseButton.setAttribute('type', 'button');
+                collapseButton.id = `collapse_element_button`;
+                collapseButton.className = 'collapse-element-button';
+                collapseButton.textContent = 'collapse';
+                const parent = fieldDiv;
+                const children = Array.from(parent.children);
+                console.log(children)
+                const filteredChildren = children.filter(child => !child.classList.contains('field-dash-div'));
+
+                
+                collapseButton.addEventListener('click', function() {
+                    filteredChildren.forEach(child => {
+                        if (child.style.display === 'none') {
+                            child.style.display = 'block';
+                        } else {
+                            child.style.display = 'none';
+                        }
+                    });
+                });
+                dashDiv.appendChild(collapseButton);
+
+
+                
+                initializeQuillEditor(quillContainer.id, hiddenInput.id, preFill=preFill);
+
+                fieldCount++;
+            }
+            function createSectionIfNone(the_section_index){
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'wrap_extra_fields';
+                sectionDiv.id = `section_${the_section_index}`;
+                allSections.appendChild(sectionDiv)
+
+                const sectionNameDiv = document.createElement('div'); 
+                sectionNameDiv.className = `section_name_div snd_${the_section_index}`;
+                sectionNameDiv.id = `snd_${the_section_index}`;
+                sectionDiv.appendChild(sectionNameDiv)
+                const sectionName = document.createElement('input');
+                sectionName.setAttribute('type', 'text');
+                sectionName.setAttribute('name', `section_name_${the_section_index}`);
+                sectionName.setAttribute('id', `id_section_name_${the_section_index}`);
+                sectionNameDiv.appendChild(sectionName)
+
+                const elementsContainer = document.createElement('div');
+                elementsContainer.id = `extra_fields_container_s${the_section_index}`;
+                elementsContainer.setAttribute('display', 'block');
+                sectionDiv.appendChild(elementsContainer)
+                
+                const addFieldButton = document.createElement('button');
+                addFieldButton.setAttribute('type', 'button');
+                addFieldButton.textContent = 'add field';
+                addFieldButton.addEventListener('click', function(){
+                    createRichTextField(elementsContainer, the_section_index);
+                });
+
+                const collapseSectionButton = document.createElement('button');
+                collapseSectionButton.setAttribute('type', 'button');
+                collapseSectionButton.id = `collapse_button_${the_section_index}`;
+                collapseSectionButton.className = 'collapse-section-button';
+                collapseSectionButton.textContent = 'collapse';
+                collapseSectionButton.addEventListener('click', function(){
+                    if(elementsContainer.style.display === 'none'){
+                        elementsContainer.style.display = 'block';
+                    } else{
+                        elementsContainer.style.display = 'none';
+                    }
+                })
+
+                const deleteSectionButton = document.createElement('button');
+                deleteSectionButton.setAttribute('type', 'button');
+                deleteSectionButton.id = `delete_button_${the_section_index}`;
+                deleteSectionButton.textContent = 'Delete Section';
+                deleteSectionButton.className = 'delete-section-button';
+                deleteSectionButton.addEventListener('click', function() {
+                    allSections.removeChild(sectionDiv);
+                });
+
+                const addImageFieldButton = document.createElement('button');
+                addImageFieldButton.setAttribute('type', 'button');
+                addImageFieldButton.textContent = 'add image';
+                addImageFieldButton.addEventListener('click', function() {
+                    createImageField(elementsContainer, the_section_index); // Add to the main container or any specific section
+                });
+                
+                const addAccordionButton = document.createElement('button');
+                addAccordionButton.setAttribute('type', 'button');
+                addAccordionButton.textContent = 'add accordion';
+                addAccordionButton.addEventListener('click', function() {
+                    createAccordion(elementsContainer, the_section_index); // Add to the main container or any specific section
+                });
+
+                sectionDiv.appendChild(addFieldButton);
+                sectionDiv.appendChild(addImageFieldButton);
+                sectionDiv.appendChild(addAccordionButton);
+                sectionNameDiv.appendChild(collapseSectionButton);
+                sectionNameDiv.appendChild(deleteSectionButton);
+            }
+
+            // creating elements functions
+            
+            // perks for elements
+            function deleteFunc(fieldDiv, elementsContainer, text='Delete', className='delete-button') {
+                const deleteButton = document.createElement('button');
+                deleteButton.setAttribute('type', 'button');
+                deleteButton.textContent = text;
+                deleteButton.className = className;
+                deleteButton.addEventListener('click', function() {
+                    elementsContainer.removeChild(fieldDiv);
+                });
+                
+                return deleteButton;
+            }
+            function createMoveDownButton(fieldDiv, elementsContainer, the_section_index) {
+                const moveDownButton = document.createElement('button');
+                moveDownButton.setAttribute('type', 'button');
+                moveDownButton.textContent = '⬇️';
+                moveDownButton.className = 'move-down-button';
+                moveDownButton.addEventListener('click', function() {
+                    moveDown(fieldDiv, elementsContainer, the_section_index);
+                });
+
+                return moveDownButton;
+            }
+            function createMoveUpButton(fieldDiv, elementsContainer, the_section_index) {
+                const moveUpButton = document.createElement('button');
+                moveUpButton.setAttribute('type', 'button');
+                moveUpButton.textContent = '⬆️';
+                moveUpButton.className = 'move-up-button';
+                moveUpButton.addEventListener('click', function() {
+                    moveUp(fieldDiv, elementsContainer, the_section_index);
+                });
+
+                return moveUpButton;
+            }
+            function collapse(theDiv){
+
+            }
+            // setting attribute to enable images
+            let form = document.getElementById('yourmodel_form');
+            if (form) {form.setAttribute('enctype', 'multipart/form-data');}
+            // setting attribute to enable images
+
+            // getting pre created html elements
+            const sectionButton = document.getElementById('add_section_button');
+            const allSections = document.getElementById('all_sections');
+            const fieldsDataString = '{{ extra_fields|safe }}'; // This is passed from Django as a string
+
+
+            // getting pre created html elements
+
+            // getting values if instance exists
+            if (fieldsDataString){
+                fieldsData = JSON.parse(fieldsDataString);
+                console.log(fieldsData)
+                fieldsData.forEach(field => {
+                    if (field.type === 'field'){
+                        const the_section_index = field.section;
+
+                        // create section if not exist
+                        if (!document.getElementById(`section_${the_section_index}`)){
+                            createSectionIfNone(the_section_index)
+                        }
+                        // create section if not exist
+
+                        const sectionDiv = document.getElementById(`section_${the_section_index}`);
+                        const elementsContainer = document.getElementById(`extra_fields_container_s${the_section_index}`);
+
+                        createRichTextField(elementsContainer, the_section_index, preFill=field.value.replace(/&quot;/g, '"'))
+
+                        sectionDiv.appendChild(elementsContainer);
+                        allSections.appendChild(sectionDiv);
+                        
+                        fieldCount++;
+                        sectionCount = field.section                        
+                    } 
+                    else if (field.type === 'image'){
+                        console.log(field.imageSrc)
+                        const the_section_index = field.section;
+
+                        if (!document.getElementById(`section_${the_section_index}`)){
+                            createSectionIfNone(the_section_index)
+                        }
+
+                        const sectionDiv = document.getElementById(`section_${the_section_index}`);
+                        const elementsContainer = document.getElementById(`extra_fields_container_s${the_section_index}`);
+
+                        // this is where creation of perview takes place
+                        createImageField(elementsContainer, the_section_index, preFill=field.imageSrc)
+                        // this is where creation of perview takes place
+                        
+                        sectionDiv.appendChild(elementsContainer);
+                        allSections.appendChild(sectionDiv);
+                        
+                        fieldCount++;
+                        sectionCount = field.section
+                    }
+                    else if (field.type === 'accordion'){
+                        const the_section_index = field.section;
+
+                        if (!document.getElementById(`section_${the_section_index}`)){
+                            createSectionIfNone(the_section_index)
+                        }
+
+                        const sectionDiv = document.getElementById(`section_${the_section_index}`);
+                        const elementsContainer = document.getElementById(`extra_fields_container_s${the_section_index}`);
+
+                        // this is where creation of perview takes place
+                        createAccordion(elementsContainer, the_section_index, preFill=field.items)
+                        // this is where creation of perview takes place
+                        
+                        sectionDiv.appendChild(elementsContainer);
+                        allSections.appendChild(sectionDiv);
+                        
+                        fieldCount++;
+                        sectionCount = field.section
+                    }
+                    
+                });  
+                    
+                sectionCount++
+            }
+            // getting values if instance exists
+            
+            // creating elements( sections )
+            sectionButton.addEventListener('click', function(){
+                const the_section_index = sectionCount
+                
+                // creating section
+                const sectionDiv = document.createElement('div'); 
+                sectionDiv.className = 'wrap_extra_fields';
+                sectionDiv.id = `section_${the_section_index}`;
+                const sectionNameDiv = document.createElement('div'); 
+                sectionNameDiv.className = `section_name_div snd_${the_section_index}`;
+                sectionNameDiv.id = `snd_${the_section_index}`;
+                sectionDiv.appendChild(sectionNameDiv)
+                const sectionName = document.createElement('input');
+                sectionName.setAttribute('type', 'text');
+                sectionName.setAttribute('name', `section_name_${the_section_index}`);
+                sectionName.setAttribute('id', `id_section_name_${the_section_index}`);
+                sectionNameDiv.appendChild(sectionName)
+                const elementsContainer = document.createElement('div');
+                elementsContainer.id = `extra_fields_container_s${the_section_index}`;
+                elementsContainer.setAttribute('display', 'block');
+                // creating section
+                
+                // collapse section
+                const collapseSectionButton = document.createElement('button');
+                collapseSectionButton.setAttribute('type', 'button');
+                collapseSectionButton.id = `collapse_button_${the_section_index}`;
+                collapseSectionButton.className = 'collapse-section-button';
+                collapseSectionButton.textContent = 'collapse';
+                collapseSectionButton.addEventListener('click', function(){
+                    if(elementsContainer.style.display === 'none'){
+                        elementsContainer.style.display = 'block';
+                    } else{
+                        elementsContainer.style.display = 'none';
+                    }
+                })
+                // collapse section
+                
+                // delete section
+                const deleteSectionButton = document.createElement('button');
+                deleteSectionButton.setAttribute('type', 'button');
+                deleteSectionButton.id = `delete_button_${the_section_index}`;
+                deleteSectionButton.textContent = 'Delete Section';
+                deleteSectionButton.className = 'delete-section-button';
+                deleteSectionButton.addEventListener('click', function() {
+                    allSections.removeChild(sectionDiv);
+                });
+                // delete section
+                
+                // create field
+                const addFieldButton = document.createElement('button');
+                addFieldButton.setAttribute('type', 'button');
+                addFieldButton.textContent = 'add field';
+                addFieldButton.addEventListener('click', function(){
+                    createRichTextField(elementsContainer, the_section_index);
+                });
+                const addImageFieldButton = document.createElement('button');
+                addImageFieldButton.setAttribute('type', 'button');
+                addImageFieldButton.textContent = 'add image';
+                addImageFieldButton.addEventListener('click', function() {
+                    createImageField(elementsContainer, the_section_index); // Add to the main container or any specific section
+                });
+                const addAccordionButton = document.createElement('button');
+                addAccordionButton.setAttribute('type', 'button');
+                addAccordionButton.textContent = 'add accordion';
+                addAccordionButton.addEventListener('click', function() {
+                    createAccordion(elementsContainer, the_section_index); // Add to the main container or any specific section
+                });
+
+                // create image
+                
+                // appends
+                sectionDiv.appendChild(elementsContainer);
+                sectionDiv.appendChild(addFieldButton);
+                sectionDiv.appendChild(addImageFieldButton);
+                sectionDiv.appendChild(addAccordionButton);
+                sectionNameDiv.appendChild(collapseSectionButton);
+                sectionNameDiv.appendChild(deleteSectionButton);
+                allSections.appendChild(sectionDiv);
+                // appends
+
+                sectionCount++
+            })
+            // creating elements
+
+            // creating image field
+            // let newImageLabel = document.createElement('label');
+            // newImageLabel.textContent = `Upload Image :`;
+            // let newImageInput = document.createElement('input');
+            // newImageInput.type = 'file';
+            // newImageInput.name = 'dynamic_images[]';
+            // newImageInput.accept = 'image/*';
+            // allSections.appendChild(newImageLabel)
+            // allSections.appendChild(newImageInput)
+            // creating image field
+
+        });
+    </script>
+    <style>
+        .wrap_extra_fields{
+            border-style: solid;border-color: green;
+            margin-bottom: 40px;
+        }
+        .display-block{
+            display: block;
+        }
+
+        .section_name_div {
+            display: flex;
+            background-color: #264b5d;
+        }
+
+        .section_name_div input{
+            margin-bottom: 0;
+            border: none;
+            background-color: #264b5d;
+            padding: 0;
+            
+        }
+
+        .section_name_div{
+            padding: 10px;
+        }
+
+        .collapse-section-button{
+            margin-left: auto;
+        }
+        
+
+
+
+        
+
+
+
+        .field-dash-name{
+            display: inline;
+        }
+
+        .field-dash-div{
+            background-color: #272727;
+            padding: 10px;
+            display: flex;
+        }
+        
+        .field-dash-div .delete-button{
+            margin-left: auto;
+        }
+        .field-dash-div h2{
+            margin: 0;
+        }
+        .image-dash-name{
+            display: inline;
+        }
+
+        .image-dash-div{
+            background-color: #272727;
+            padding: 10px;
+            display: flex;
+        }
+        
+        .image-dash-div .delete-button{
+            margin-left: auto;
+        }
+        .image-dash-div h2{
+            margin: 0;
+        }
+        .ac-dash-name{
+            display: inline;
+        }
+
+        .ac-dash-div{
+            background-color: #272727;
+            padding: 10px;
+            display: flex;
+        }
+        
+        .ac-dash-div .delete-button{
+            margin-left: auto;
+        }
+        .ac-dash-div h2{
+            margin: 0;
+        }
+
+        .field-extra_field{
+            padding: 0;
+        }
+        /* .wrap_extra_fields {
+    position: relative;
+    padding-bottom: 40px;
+}
+
+.wrap_extra_fields .delete-section-button,
+.wrap_extra_fields .collapse-button {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    margin-left: 5px;
+} */
+
+
+        /* Styling for accordion container */
+.accordion-field {
+    border-radius: 6px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #7bb9f7; /* Light gray background */
+}
+
+/* Button to add items inside the accordion */
+.accordion-field .additem-button {
+    padding: 5px 10px;
+    margin-bottom: 10px;
+    background-color: #007bff; /* Blue for action buttons */
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+/* Hover effect for 'Add item' button */
+.accordion-field .additem-button:hover {
+    background-color: #0056b3;
+}
+
+/* Styling for individual accordion items */
+.ac-item {
+    margin: 8px 0;
+    padding: 8px;
+    background-color: #fff; /* White background for clarity */
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Input fields within accordion items */
+.ac-item-content input[type="text"] {
+    width: calc(100% - 20px);
+    padding: 6px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* Button for accordion actions (e.g., delete, move) */
+.ac-item button {
+    margin-right: 5px;
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: none;
+    transition: background-color 0.3s ease;
+}
+
+/* Styling specific action buttons */
+.ac-item .delete-button {
+    background-color: #dc3545; /* Red for delete */
+    color: white;
+}
+
+.ac-item .delete-button:hover {
+    background-color: #c82333;
+}
+
+/* Move up/down buttons */
+.ac-item .move-up-button, .ac-item .move-down-button {
+    background-color: #ffc107; /* Yellow for move actions */
+    color: black;
+}
+
+.ac-item .move-up-button:hover, .ac-item .move-down-button:hover {
+    background-color: #e0a800;
+}
+.ac-item-content    {
+    border-bottom: none !important;
+}
+
+.form-row{
+            padding: 0;
+        }
+
+        .ql-editor {
+    background-color: white;
+    color: black;
+}
+
+/* Set the toolbar background to match the 'snow' theme */
+.ql-toolbar {
+    background-color: #f3f3f3;
+    color: black;
+}
+.quill-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: inline-block;
+    text-decoration: none;
+}
+
+.quill-button:hover {
+    background-color: #0056b3;
+}
+    </style>
+{% endblock %}

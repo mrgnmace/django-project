@@ -1,0 +1,7 @@
+from pipi.models import YourModel, ExtraField 
+instance = YourModel.objects.get(id=16) 
+extra_fields = instance.extra_fields.all()
+for extra_field in extra_fields:
+	print(extra_field.__dict__)
+
+pass values of an existing instance if applicable and insert into cmsw
